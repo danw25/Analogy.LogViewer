@@ -362,3 +362,6 @@ MigrationBackup/
 
 *.bak
 _ReSharper.Caches
+/Analogy/obj
+/Analogy/Properties/launchSettings.json
+/Visual Studio 2019/Visualizers/attribcache140.bin

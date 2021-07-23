@@ -23,7 +23,9 @@ namespace Analogy.Managers
         public void AddFolder(string path)
         {
             if (!FoldersToClean.Contains(path))
+            {
                 FoldersToClean.Add(path);
+            }
         }
 
         public void Clean()
@@ -32,14 +34,16 @@ namespace Analogy.Managers
             {
 
                 if (Directory.Exists(path))
+                {
                     try
                     {
                         Directory.Delete(path, true);
                     }
                     catch (Exception e)
                     {
-                        AnalogyLogger.Instance.LogException(e, "Cleanup", $"Error delete folder: {e.Message}");
+                        AnalogyLogger.Instance.LogException($"Error delete folder: {e.Message}",e, "Cleanup");
                     }
+                }
             }
 
 

@@ -1,10 +1,11 @@
 ﻿using Analogy.Interfaces;
-using Analogy.Types;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows.Forms;
+using Analogy.DataTypes;
+using Analogy.Forms;
 using Message = System.Windows.Forms.Message;
 
 namespace Analogy
@@ -27,7 +28,11 @@ namespace Analogy
         }
         private void OnlineUCLogs_Load(object sender, EventArgs e)
         {
-            if (DesignMode) return;
+            if (DesignMode)
+            {
+                return;
+            }
+
             ucLogs1.OnHistoryCleared += UcLogs1_OnHistoryCleared;
             spltMain.Panel1Collapsed = true;
         }
@@ -45,7 +50,6 @@ namespace Analogy
             listBoxClearHistory.SelectedIndexChanged += ListBoxClearHistoryIndexChanged;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AppendMessage(AnalogyLogMessage message, string dataSource)
         {
             if (Enable && !IsDisposed)
@@ -55,7 +59,6 @@ namespace Analogy
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AppendMessages(List<AnalogyLogMessage> messages, string dataSource)
         {
             if (Enable && !IsDisposed)
@@ -72,14 +75,22 @@ namespace Analogy
 
         private void bbtnHide_ItemClick(object sender, DevExpress.XtraBars.ItemClickEventArgs e)
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+            {
+                return;
+            }
+
             _showHistory = false;
             spltMain.Panel1Collapsed = true;
         }
 
         private void ListBoxClearHistoryIndexChanged(object sender, EventArgs e)
         {
-            if (listBoxClearHistory.SelectedItem == null) return;
+            if (listBoxClearHistory.SelectedItem == null)
+            {
+                return;
+            }
+
             var messages = FileProcessingManager.Instance.GetMessages((string)listBoxClearHistory.SelectedItem);
             XtraFormLogGrid grid = new XtraFormLogGrid(messages, Environment.MachineName, ucLogs1.DataProvider, ucLogs1.FileDataProvider);
             grid.Show(this);

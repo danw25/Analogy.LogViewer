@@ -1,4 +1,5 @@
-﻿using DevExpress.XtraEditors;
+﻿using Analogy.Interfaces;
+using DevExpress.XtraEditors;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -6,8 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using Analogy.Interfaces;
+using Analogy.Interfaces.DataTypes;
 
 namespace Analogy
 {
@@ -16,7 +16,6 @@ namespace Analogy
         public bool ForceNoFileCaching { get; set; } = false;
         public bool DoNotAddToRecentHistory { get; set; } = false;
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-        private string sourcePath;
         private int refreshDelay = 100;
         private DateTime LastReportUpdate = DateTime.Now;
         public IAnalogyOfflineDataProvider DataProvider { get; set; }
@@ -55,7 +54,11 @@ namespace Analogy
                 TextMessages.Add(status);
                 if (DateTime.Now.Subtract(LastReportUpdate).TotalMilliseconds > refreshDelay || (value.Processed == value.Total))
                 {
-                    if (IsDisposed) return;
+                    if (IsDisposed)
+                    {
+                        return;
+                    }
+
                     LastReportUpdate = DateTime.Now;
                     richTextBox1.Text += status + Environment.NewLine;
                     richTextBox1.SelectionStart = richTextBox1.Text.Length;
@@ -69,7 +72,11 @@ namespace Analogy
             {
                 //if (DateTime.Now.Subtract(LastReportUpdate).TotalMilliseconds > refreshDelay)
                 //{
-                if (IsDisposed) return;
+                if (IsDisposed)
+                {
+                    return;
+                }
+
                 //LastReportUpdate = DateTime.Now;
                 richTextBox1.Text += text + Environment.NewLine;
                 richTextBox1.SelectionStart = richTextBox1.Text.Length;
@@ -91,7 +98,11 @@ namespace Analogy
             int processed = 0;
             foreach (string filename in FileNames)
             {
-                if (Manager.AlreadyProcessed(Path.GetFileName(filename))) continue;
+                if (Manager.AlreadyProcessed(Path.GetFileName(filename)))
+                {
+                    continue;
+                }
+
                 FileProcessor fp = new FileProcessor(this);
                 await fp.Process(DataProvider, filename, cancellationTokenSource.Token);
                 processed += 1;
@@ -184,44 +195,11 @@ namespace Analogy
 
         public void CollapsePanel(bool top)
         {
-
             splitContainerControl1.PanelVisibility = top ? SplitPanelVisibility.Panel1 : SplitPanelVisibility.Panel2;
-
         }
-
-        private void etlParser_Progress(int progress, int total, string fileName, bool convertSource)
+        public void ReportFileReadProgress(AnalogyFileReadProgress progress)
         {
-            if (progressBar1.InvokeRequired)
-            {
-                BeginInvoke(new MethodInvoker(() => etlParser_Progress(progress, total, fileName, convertSource)));
-            }
-            else
-            {
-                progressBar1.Minimum = 0;
-                progressBar1.Maximum = total;
-                progressBar1.Value = progress;
-
-                richTextBox1.Text += fileName + "\r\n";
-            }
-            if (convertSource && total == progress)
-            {
-                richTextBox1.Text += string.Format("\r\nSystem Completed Conversion of {0} ETL files\r\n", total);
-                richTextBox1.Text += string.Format("\r\nDeleting Temporary Folder (used for bugrep extraction):\r\n{0}", sourcePath);
-                if (Directory.Exists(sourcePath))
-                {
-                    string path = string.Empty;
-                    if (sourcePath.Contains("\\BugNode\\"))
-                        path = sourcePath.Substring(0, sourcePath.IndexOf("\\BugNode\\"));
-                    else if (sourcePath.Contains("\\BugRep\\"))
-                        path = sourcePath.Substring(0, sourcePath.IndexOf("\\BugRep\\"));
-                    if (path != string.Empty)
-                        Directory.Delete(path, true);
-                }
-                richTextBox1.Text += "\r\nTemporary Folder Deleted Successfully";
-                richTextBox1.Text += "\r\n\r\n\r\nCONVERSION COMPLETED!\r\n\r\n";
-            }
-            richTextBox1.SelectionStart = richTextBox1.Text.Length;
-            richTextBox1.ScrollToCaret();
+            //noop
         }
     }
 }

@@ -1,10 +1,11 @@
-﻿using Analogy.DataProviders;
+﻿using Analogy.CommonUtilities.Web;
+using Analogy.DataTypes;
 using Analogy.Interfaces;
-using Analogy.Interfaces.DataTypes;
 using Analogy.Interfaces.Factories;
 using Analogy.Managers;
 using Analogy.Properties;
-using Analogy.Types;
+using DevExpress.LookAndFeel;
+using DevExpress.XtraBars.Ribbon;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -21,16 +22,29 @@ namespace Analogy
     {
         public event EventHandler OnFactoryOrderChanged;
 
+        private static UserSettingsManager? _userSettings;
 
-        private static readonly Lazy<UserSettingsManager> _instance =
-            new Lazy<UserSettingsManager>(() => new UserSettingsManager());
-
+        private CommandLayout _ribbonStyle;
+        private bool _enableFirstChanceException;
+        public event EventHandler<bool> OnEnableFirstChanceExceptionChanged;
+        public event EventHandler<CommandLayout> OnRibbonControlStyleChanged;
+        private string LocalSettingFileName { get; } = "AnalogyLocalSettings.json";
+        public string DisplayRunningTime => $"{AnalogyRunningTime:dd\\.hh\\:mm\\:ss} days";
+        public Guid InitialSelectedDataProvider { get; set; } = new Guid("D3047F5D-CFEB-4A69-8F10-AE5F4D3F2D04");
         public string ApplicationSkinName { get; set; }
-        public static UserSettingsManager UserSettings { get; set; } = _instance.Value;
+
+        /// <remarks>
+        /// Manually implemented lazy pattern to enable setting while keeping the ctor in the getter lazy.
+        /// </remarks>
+        public static UserSettingsManager UserSettings
+        {
+            get => _userSettings ??= new UserSettingsManager();
+            set => _userSettings = value;
+        }
+
         public bool SaveSearchFilters { get; set; }
         public string IncludeText { get; set; }
-        public string ExcludedText { get; set; }
-
+        public string ExcludeText { get; set; }
         public string SourceText { get; set; }
         public string ModuleText { get; set; }
         public List<(Guid ID, string FileName)> RecentFiles { get; set; }
@@ -43,17 +57,15 @@ namespace Analogy
         public uint AnalogyLaunches { get; set; }
         public uint AnalogyOpenedFiles { get; set; }
         public bool EnableFileCaching { get; set; }
-        public string DisplayRunningTime => $"{AnalogyRunningTime:dd\\.hh\\:mm\\:ss} days";
-        public bool LoadExtensionsOnStartup { get; set; }
+
         public List<Guid> StartupExtensions { get; set; }
         public bool StartupRibbonMinimized { get; set; }
         public bool StartupErrorLogLevel { get; set; }
         public bool PagingEnabled { get; set; }
         public int PagingSize { get; set; }
         public bool ShowChangeLogAtStartUp { get; set; }
-        public float FontSize { get; set; }
         public bool SearchAlsoInSourceAndModule { get; set; }
-        public string InitialSelectedDataProvider { get; set; } = "D3047F5D-CFEB-4A69-8F10-AE5F4D3F2D04";
+
         public bool IdleMode { get; set; }
         public int IdleTimeMinutes { get; set; }
 
@@ -62,10 +74,10 @@ namespace Analogy
         public List<Guid> AutoStartDataProviders { get; set; }
         public bool AutoScrollToLastMessage { get; set; }
         public bool DefaultDescendOrder { get; set; }
-        //public LogParserSettingsContainer LogParsersSettings { get; set; }
         public ColorSettings ColorSettings { get; set; }
         public List<Guid> FactoriesOrder { get; set; }
         public List<FactorySettings> FactoriesSettings { get; set; }
+
         public Guid LastOpenedDataProvider { get; set; }
         public bool RememberLastOpenedDataProvider { get; set; }
         public bool RememberLastSearches { get; set; }
@@ -81,23 +93,95 @@ namespace Analogy
         public string DateTimePattern { get; set; }
         public UpdateMode UpdateMode { get; set; }
         public DateTime LastUpdate { get; set; }
-        public GithubReleaseEntry LastVersionChecked { get; set; }
-        public string GitHubToken { get; } = Environment.GetEnvironmentVariable("AnalogyGitHub_Token");
+        public GithubObjects.GithubReleaseEntry? LastVersionChecked { get; set; }
+        public string GitHubToken { get; } = Environment.GetEnvironmentVariable("AnalogyGitHub_Token") ?? string.Empty;
         public bool MinimizedToTrayBar { get; set; }
         public bool CheckAdditionalInformation { get; set; }
 
         public AnalogyPositionState AnalogyPosition { get; set; }
+        public bool EnableCompressedArchives { get; set; }
+        public bool IsBuiltInSearchPanelVisible { get; set; }
+        public BuiltInSearchPanelMode BuiltInSearchPanelMode { get; set; }
+        public string ApplicationSvgPaletteName { get; set; }
+        public LookAndFeelStyle ApplicationStyle { get; set; } = LookAndFeelStyle.Skin;
+        public bool ShowMessageDetails { get; set; }
+        public bool SimpleMode { get; set; }
+        public bool IsFirstRun { get; set; }
+        public LogLevelSelectionType LogLevelSelection { get; set; }
+        public bool ShowWhatIsNewAtStartup { get; set; }
+        public FontSettings FontSettings { get; set; }
 
+        public bool EnableFirstChanceException
+        {
+            get => _enableFirstChanceException;
+            set
+            {
+                if (_enableFirstChanceException != value)
+                {
+                    _enableFirstChanceException = value;
+                    OnEnableFirstChanceExceptionChanged?.Invoke(this, value);
+                }
+            }
+        }
+        public CommandLayout RibbonStyle
+        {
+            get => _ribbonStyle;
+            set
+            {
+                if (_ribbonStyle != value)
+                {
+                    _ribbonStyle = value;
+                    OnRibbonControlStyleChanged?.Invoke(this, value);
+
+                }
+            }
+        }
+        public bool TrackActiveMessage { get; set; }
+        public float RealTimeRefreshInterval { get; set; }
+        public FilteringExclusion FilteringExclusion { get; set; }
+        public string LogsLayoutFileName { get; set; }
+        public bool UseCustomLogsLayout { get; set; }
+        public bool ViewDetailedMessageWithHTML { get; set; }
+
+        public SettingsMode SettingsMode { get; set; }
+        public MainFormType MainFormType { get; set; }
+        public string DefaultUserLogFolder { get; set; }
+        public TimeSpan TimeOffset { get; set; }
+        public TimeOffsetType TimeOffsetType { get; set; }
         public UserSettingsManager()
         {
-            Load();
+            if (File.Exists(LocalSettingFileName))
+            {
+                try
+                {
+                    string data = File.ReadAllText(LocalSettingFileName);
+                    var settings = JsonConvert.DeserializeObject<UserSettings>(data);
+                    ApplyLocalSettings(settings);
+                }
+                catch (Exception e)
+                {
+                    AnalogyLogManager.Instance.LogInformation($"Unable to read settings from {LocalSettingFileName}. Error: {e.Message}. Loading per user settings", nameof(UserSettingsManager));
+                    LoadPerUserSettings();
+                }
+            }
+            else
+            {
+                AnalogyLogManager.Instance.LogInformation($"File {LocalSettingFileName} does not exist. Loading per user settings", nameof(UserSettingsManager));
+                LoadPerUserSettings();
+            }
         }
 
-        public void Load()
+
+        private void LoadPerUserSettings()
         {
+            SettingsMode = SettingsMode.PerUser;
+            FilteringExclusion = ParseSettings<FilteringExclusion>(Settings.Default.FilteringExclusion);
+            EnableCompressedArchives = true;
             AnalogyInternalLogPeriod = 5;
+            bool upgradeRequired = false;
             if (Settings.Default.UpgradeRequired)
             {
+                upgradeRequired = true;
                 Settings.Default.Upgrade();
                 Settings.Default.UpgradeRequired = false;
                 Settings.Default.Save();
@@ -106,13 +190,15 @@ namespace Analogy
             DateTimePattern = !string.IsNullOrEmpty(Settings.Default.DateTimePattern)
                 ? Settings.Default.DateTimePattern
                 : "yyyy.MM.dd HH:mm:ss.ff";
+            IsFirstRun = Settings.Default.FirstRun;
             AnalogyIcon = Settings.Default.AnalogyIcon;
             ApplicationSkinName = Settings.Default.ApplicationSkinName;
             EnableUserStatistics = Settings.Default.EnableUserStatistics;
             AnalogyRunningTime = Settings.Default.AnalogyRunningTime;
             AnalogyLaunches = Settings.Default.AnalogyLaunchesCount;
             AnalogyOpenedFiles = Settings.Default.OpenFilesCount;
-            ExcludedText = Settings.Default.ModuleText;
+            ExcludeText = Settings.Default.ExcludeText;
+            IncludeText = Settings.Default.IncludeText;
             SourceText = Settings.Default.SourceText;
             ModuleText = Settings.Default.ModuleText;
             ShowHistoryOfClearedMessages = Settings.Default.ShowHistoryClearedMessages;
@@ -122,14 +208,12 @@ namespace Analogy
             RecentFoldersCount = Settings.Default.RecentFoldersCount;
             RecentFolders = ParseSettings<List<(Guid ID, string Path)>>(Settings.Default.RecentFolders);
             EnableFileCaching = Settings.Default.EnableFileCaching;
-            LoadExtensionsOnStartup = Settings.Default.LoadExtensionsOnStartup;
             StartupExtensions = ParseSettings<List<Guid>>(Settings.Default.StartupExtensions);
             StartupRibbonMinimized = Settings.Default.StartupRibbonMinimized;
             StartupErrorLogLevel = Settings.Default.StartupErrorLogLevel;
             PagingEnabled = Settings.Default.PagingEnabled;
             PagingSize = Settings.Default.PagingSize;
             ShowChangeLogAtStartUp = Settings.Default.ShowChangeLogAtStartUp;
-            FontSize = Settings.Default.FontSize;
             IncludeText = Settings.Default.IncludeText;
             SearchAlsoInSourceAndModule = Settings.Default.SearchAlsoInSourceAndModule;
             IdleMode = Settings.Default.IdleMode;
@@ -140,37 +224,231 @@ namespace Analogy
             ColorSettings = ParseSettings<ColorSettings>(Settings.Default.ColorSettings);
             DefaultDescendOrder = Settings.Default.DefaultDescendOrder;
             FactoriesOrder = ParseSettings<List<Guid>>(Settings.Default.FactoriesOrder);
-            FactoriesSettings = ParseSettings<List<FactorySettings>>(Settings.Default.FactoriesSettings).Where(f => f.FactoryId != Guid.Empty).ToList();
+            FactoriesSettings = ParseSettings<List<FactorySettings>>(Settings.Default.FactoriesSettings)
+                .Where(f => f.FactoryId != Guid.Empty).ToList();
             LastOpenedDataProvider = Settings.Default.LastOpenedDataProvider;
             PreDefinedQueries = ParseSettings<PreDefinedQueries>(Settings.Default.PreDefinedQueries);
             RememberLastOpenedDataProvider = Settings.Default.RememberLastOpenedDataProvider;
             RememberLastSearches = Settings.Default.RememberLastSearches;
             LastSearchesInclude = ParseSettings<List<string>>(Settings.Default.LastSearchesInclude);
             LastSearchesExclude = ParseSettings<List<string>>(Settings.Default.LastSearchesExclude);
+            SimpleMode = Settings.Default.SimpleMode;
             NumberOfLastSearches = Settings.Default.NumberOfLastSearches;
             AdditionalProbingLocations = ParseSettings<List<string>>(Settings.Default.AdditionalProbingLocations);
             SingleInstance = Settings.Default.SingleInstance;
             LastUpdate = Settings.Default.LastUpdate;
-            LastVersionChecked = ParseSettings<GithubReleaseEntry>(Settings.Default.LastVersionChecked);
-            switch (Settings.Default.UpdateMode)
+            LastVersionChecked = ParseSettings<GithubObjects.GithubReleaseEntry>(Settings.Default.LastVersionChecked);
+            UpdateMode = Settings.Default.UpdateMode switch
             {
-                case 0:
-                    UpdateMode = UpdateMode.Never;
-                    break;
-                case 1:
-                    UpdateMode = UpdateMode.EachStartup;
-                    break;
-                case 2:
-                    UpdateMode = UpdateMode.OnceAWeek;
-                    break;
-                case 3:
-                    UpdateMode = UpdateMode.OnceAMonth;
-                    break;
+                0 => UpdateMode.Never,
+                1 => UpdateMode.EachStartup,
+                2 => UpdateMode.OnceAWeek,
+                3 => UpdateMode.OnceAMonth,
+                _ => UpdateMode
+            };
+
+            if (Enum.TryParse(Settings.Default.ApplicationStyle, out LookAndFeelStyle style))
+            {
+                ApplicationStyle = style;
+            }
+            if (Enum.TryParse(Settings.Default.LogLevelSelection, out LogLevelSelectionType type))
+            {
+                LogLevelSelection = type;
+            }
+            ApplicationSvgPaletteName = Settings.Default.ApplicationSvgPaletteName;
+            MinimizedToTrayBar = Settings.Default.MinimizedToTrayBar;
+            CheckAdditionalInformation = Settings.Default.CheckAdditionalInformation;
+            AnalogyPosition = ParseSettings<AnalogyPositionState>(Settings.Default.AnalogyPosition) ??
+                              new AnalogyPositionState();
+            EnableCompressedArchives = Settings.Default.EnableCompressedArchives;
+            IsBuiltInSearchPanelVisible = Settings.Default.IsBuiltInSearchPanelVisible;
+            if (Enum.TryParse(Settings.Default.BuiltInSearchPanelMode, out BuiltInSearchPanelMode result))
+            {
+                BuiltInSearchPanelMode = result;
             }
 
-            MinimizedToTrayBar = Settings.Default.MinimizedToTrayBar;
-            CheckAdditionalInformation = Settings.Default.CheckAdditionalInformation; 
-            AnalogyPosition = ParseSettings<AnalogyPositionState>(Settings.Default.AnalogyPosition) ?? new AnalogyPositionState();
+            ShowMessageDetails = Settings.Default.ShowMessageDetails;
+            ShowWhatIsNewAtStartup = upgradeRequired || Settings.Default.ShowWhatIsNewAtStartup;
+            FontSettings = ParseSettings<FontSettings>(Settings.Default.FontSettings);
+            RibbonStyle = (CommandLayout)Settings.Default.RibbonStyle;
+            EnableFirstChanceException = Settings.Default.EnableFirstChanceException;
+            TrackActiveMessage = Settings.Default.TrackActiveMessage;
+            RealTimeRefreshInterval = Settings.Default.RealTimeRefreshInterval;
+            UseCustomLogsLayout = Settings.Default.UseCustomLogsLayout;
+            LogsLayoutFileName = Settings.Default.LogsLayoutFileName;
+            ViewDetailedMessageWithHTML = Settings.Default.ViewDetailedMessageWithHTML;
+            if (Enum.TryParse<MainFormType>(Settings.Default.MainFormType, out var layoutVersion))
+            {
+                MainFormType = layoutVersion;
+            }
+
+            if (Enum.TryParse<TimeOffsetType>(Settings.Default.TimeOffsetType, out var timeOffsetTypeValue))
+            {
+                TimeOffsetType = timeOffsetTypeValue;
+            }
+            DefaultUserLogFolder = Settings.Default.DefaultUserLogFolder;
+            TimeOffset=TimeSpan.FromMilliseconds(Settings.Default.TimeOffset);
+        }
+
+        private void ApplyLocalSettings(UserSettings settings)
+        {
+            SettingsMode = SettingsMode.ApplicationFolder;
+            ApplicationSkinName = settings.ApplicationSkinName;
+            SaveSearchFilters = settings.SaveSearchFilters;
+            IncludeText = settings.IncludeText;
+            ExcludeText = settings.ExcludeText;
+            SourceText = settings.SourceText;
+            ModuleText = settings.ModuleText;
+            RecentFiles = settings.RecentFiles;
+            RecentFolders = settings.RecentFolders;
+            ShowHistoryOfClearedMessages = settings.ShowHistoryOfClearedMessages;
+            RecentFilesCount = settings.RecentFilesCount;
+            RecentFoldersCount = settings.RecentFoldersCount;
+            EnableUserStatistics = settings.EnableUserStatistics;
+            AnalogyRunningTime = settings.AnalogyRunningTime;
+            AnalogyLaunches = settings.AnalogyLaunches;
+            AnalogyOpenedFiles = settings.AnalogyOpenedFiles;
+            EnableFileCaching = settings.EnableFileCaching;
+            StartupExtensions = settings.StartupExtensions;
+            StartupRibbonMinimized = settings.StartupRibbonMinimized;
+            StartupErrorLogLevel = settings.StartupErrorLogLevel;
+            PagingEnabled = settings.PagingEnabled;
+            PagingSize = settings.PagingSize;
+            ShowChangeLogAtStartUp = settings.ShowChangeLogAtStartUp;
+            SearchAlsoInSourceAndModule = settings.SearchAlsoInSourceAndModule;
+            IdleMode = settings.IdleMode;
+            IdleTimeMinutes = settings.IdleTimeMinutes;
+            EventLogs = settings.EventLogs;
+            AutoStartDataProviders = settings.AutoStartDataProviders;
+            AutoScrollToLastMessage = settings.AutoScrollToLastMessage;
+            DefaultDescendOrder = settings.DefaultDescendOrder;
+            ColorSettings = settings.ColorSettings;
+            FactoriesOrder = settings.FactoriesOrder;
+            FactoriesSettings = settings.FactoriesSettings;
+            LastOpenedDataProvider = settings.LastOpenedDataProvider;
+            RememberLastOpenedDataProvider = settings.RememberLastOpenedDataProvider;
+            RememberLastSearches = settings.RememberLastSearches;
+            PreDefinedQueries = settings.PreDefinedQueries;
+            NumberOfLastSearches = settings.NumberOfLastSearches;
+            LastSearchesInclude = settings.LastSearchesInclude;
+            LastSearchesExclude = settings.LastSearchesExclude;
+            AnalogyInternalLogPeriod = settings.AnalogyInternalLogPeriod;
+            AdditionalProbingLocations = settings.AdditionalProbingLocations;
+            SingleInstance = settings.SingleInstance;
+            AnalogyIcon = settings.AnalogyIcon;
+            DateTimePattern = settings.DateTimePattern;
+            UpdateMode = settings.UpdateMode;
+            LastUpdate = settings.LastUpdate;
+            LastVersionChecked = settings.LastVersionChecked;
+            MinimizedToTrayBar = settings.MinimizedToTrayBar;
+            CheckAdditionalInformation = settings.CheckAdditionalInformation;
+            AnalogyPosition = settings.AnalogyPosition;
+            EnableCompressedArchives = settings.EnableCompressedArchives;
+            IsBuiltInSearchPanelVisible = settings.IsBuiltInSearchPanelVisible;
+            BuiltInSearchPanelMode = settings.BuiltInSearchPanelMode;
+            ApplicationSvgPaletteName = settings.ApplicationSvgPaletteName;
+            ApplicationStyle = settings.ApplicationStyle;
+            ShowMessageDetails = settings.ShowMessageDetails;
+            SimpleMode = settings.SimpleMode;
+            IsFirstRun = settings.IsFirstRun;
+            LogLevelSelection = settings.LogLevelSelection;
+            FontSettings = settings.FontSettings;
+            EnableFirstChanceException = settings.EnableFirstChanceException;
+            RibbonStyle = settings.RibbonStyle;
+            TrackActiveMessage = settings.TrackActiveMessage;
+            RealTimeRefreshInterval = settings.RealTimeRefreshInterval;
+            FilteringExclusion = settings.FilteringExclusion;
+            LogsLayoutFileName = settings.LogsLayoutFileName;
+            UseCustomLogsLayout = settings.UseCustomLogsLayout;
+            ViewDetailedMessageWithHTML = settings.ViewDetailedMessageWithHTML;
+            ShowWhatIsNewAtStartup = settings.ShowWhatIsNewAtStartup ||
+                                     UpdateManager.Instance.CurrentVersion.ToString(4) != settings.Version;
+            MainFormType = settings.MainFormType;
+            TimeOffsetType = settings.TimeOffsetType;
+            DefaultUserLogFolder = settings.DefaultUserLogFolder;
+            TimeOffset = settings.TimeOffset;
+        }
+
+        private UserSettings CreateUserSettings()
+        {
+            var userSettings = new UserSettings()
+            {
+                ApplicationSkinName = ApplicationSkinName,
+                SaveSearchFilters = SaveSearchFilters,
+                IncludeText = IncludeText,
+                ExcludeText = ExcludeText,
+                SourceText = SourceText,
+                ModuleText = ModuleText,
+                RecentFiles = RecentFiles,
+                RecentFolders = RecentFolders,
+                ShowHistoryOfClearedMessages = ShowHistoryOfClearedMessages,
+                RecentFilesCount = RecentFilesCount,
+                RecentFoldersCount = RecentFoldersCount,
+                EnableUserStatistics = EnableUserStatistics,
+                AnalogyRunningTime = AnalogyRunningTime,
+                AnalogyLaunches = AnalogyLaunches,
+                AnalogyOpenedFiles = AnalogyOpenedFiles,
+                EnableFileCaching = EnableFileCaching,
+                StartupExtensions = StartupExtensions,
+                StartupRibbonMinimized = StartupRibbonMinimized,
+                StartupErrorLogLevel = StartupErrorLogLevel,
+                PagingEnabled = PagingEnabled,
+                PagingSize = PagingSize,
+                ShowChangeLogAtStartUp = ShowChangeLogAtStartUp,
+                SearchAlsoInSourceAndModule = SearchAlsoInSourceAndModule,
+                IdleMode = IdleMode,
+                IdleTimeMinutes = IdleTimeMinutes,
+                EventLogs = EventLogs,
+                AutoStartDataProviders = AutoStartDataProviders,
+                AutoScrollToLastMessage = AutoScrollToLastMessage,
+                DefaultDescendOrder = DefaultDescendOrder,
+                ColorSettings = ColorSettings,
+                FactoriesOrder = FactoriesOrder,
+                FactoriesSettings = FactoriesSettings,
+                LastOpenedDataProvider = LastOpenedDataProvider,
+                RememberLastOpenedDataProvider = RememberLastOpenedDataProvider,
+                RememberLastSearches = RememberLastSearches,
+                PreDefinedQueries = PreDefinedQueries,
+                NumberOfLastSearches = NumberOfLastSearches,
+                LastSearchesInclude = LastSearchesInclude,
+                LastSearchesExclude = LastSearchesExclude,
+                AnalogyInternalLogPeriod = AnalogyInternalLogPeriod,
+                AdditionalProbingLocations = AdditionalProbingLocations,
+                SingleInstance = SingleInstance,
+                AnalogyIcon = AnalogyIcon,
+                DateTimePattern = DateTimePattern,
+                UpdateMode = UpdateMode,
+                LastUpdate = LastUpdate,
+                LastVersionChecked = LastVersionChecked,
+                MinimizedToTrayBar = MinimizedToTrayBar,
+                CheckAdditionalInformation = CheckAdditionalInformation,
+                AnalogyPosition = AnalogyPosition,
+                EnableCompressedArchives = EnableCompressedArchives,
+                IsBuiltInSearchPanelVisible = IsBuiltInSearchPanelVisible,
+                BuiltInSearchPanelMode = BuiltInSearchPanelMode,
+                ApplicationSvgPaletteName = ApplicationSvgPaletteName,
+                ApplicationStyle = ApplicationStyle,
+                ShowMessageDetails = ShowMessageDetails,
+                SimpleMode = SimpleMode,
+                IsFirstRun = IsFirstRun,
+                LogLevelSelection = LogLevelSelection,
+                ShowWhatIsNewAtStartup = ShowWhatIsNewAtStartup,
+                FontSettings = FontSettings,
+                EnableFirstChanceException = EnableFirstChanceException,
+                RibbonStyle = RibbonStyle,
+                TrackActiveMessage = TrackActiveMessage,
+                RealTimeRefreshInterval = RealTimeRefreshInterval,
+                FilteringExclusion = FilteringExclusion,
+                LogsLayoutFileName = LogsLayoutFileName,
+                UseCustomLogsLayout = UseCustomLogsLayout,
+                ViewDetailedMessageWithHTML = ViewDetailedMessageWithHTML,
+                MainFormType = MainFormType,
+                TimeOffsetType= TimeOffsetType,
+                DefaultUserLogFolder = DefaultUserLogFolder,
+                TimeOffset = TimeOffset
+
+            };
+            return userSettings;
         }
 
         private T ParseSettings<T>(string data) where T : new()
@@ -191,6 +469,69 @@ namespace Analogy
         }
         public void Save()
         {
+            switch (SettingsMode)
+            {
+                case SettingsMode.PerUser:
+                    SavePerUserSettings();
+                    DeletePortableSettings();
+                    break;
+                case SettingsMode.ApplicationFolder:
+                    SavePortableSettings();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+            //SaveSettingModeToRegistry();
+        }
+
+        private void DeletePortableSettings()
+        {
+            if (File.Exists(LocalSettingFileName))
+            {
+                try
+                {
+                    File.Delete(LocalSettingFileName);
+                }
+                catch (Exception e)
+                {
+                    AnalogyLogManager.Instance.LogError($"Unable to remove local settings. Error: {e.Message}.", nameof(UserSettingsManager));
+                }
+            }
+        }
+
+        //private void SaveSettingModeToRegistry()
+        //{
+        //    try
+        //    {
+        //        using RegistryKey key = Registry.LocalMachine.CreateSubKey(AnalogyRegistryKey);
+        //        key?.SetValue("SettingsMode", SettingsMode.ToString());
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        AnalogyLogger.Instance.LogError($"Unable to create registry key: {e.Message}");
+        //    }
+        //}
+
+        private void SavePortableSettings()
+        {
+            try
+            {
+                UserSettings settings = CreateUserSettings();
+                settings.Version = UpdateManager.Instance.CurrentVersion.ToString(4);
+                string data = JsonConvert.SerializeObject(settings);
+                File.WriteAllText(LocalSettingFileName, data);
+            }
+            catch (Exception e)
+            {
+                AnalogyLogManager.Instance.LogError($"Unable to save setting to {LocalSettingFileName}. Error: {e.Message}. Saving Per user", nameof(UserSettingsManager));
+                SettingsMode = SettingsMode.PerUser;
+                SavePerUserSettings();
+            }
+        }
+
+        private void SavePerUserSettings()
+        {
+            Settings.Default.FirstRun = false;
             Settings.Default.DateTimePattern = !string.IsNullOrEmpty(DateTimePattern)
                 ? DateTimePattern
                 : "yyyy.MM.dd HH:mm:ss.ff";
@@ -202,6 +543,8 @@ namespace Analogy
             Settings.Default.OpenFilesCount = AnalogyOpenedFiles;
             Settings.Default.ModuleText = ModuleText;
             Settings.Default.SourceText = SourceText;
+            Settings.Default.ExcludeText = ExcludeText;
+            Settings.Default.IncludeText = IncludeText;
             Settings.Default.ShowHistoryClearedMessages = ShowHistoryOfClearedMessages;
             Settings.Default.SaveSearchFilters = SaveSearchFilters;
             Settings.Default.RecentFilesCount = RecentFilesCount;
@@ -209,14 +552,12 @@ namespace Analogy
             Settings.Default.RecentFoldersCount = RecentFoldersCount;
             Settings.Default.RecentFolders = JsonConvert.SerializeObject(RecentFolders.Take(RecentFoldersCount).ToList());
             Settings.Default.EnableFileCaching = EnableFileCaching;
-            Settings.Default.LoadExtensionsOnStartup = LoadExtensionsOnStartup;
             Settings.Default.StartupExtensions = JsonConvert.SerializeObject(StartupExtensions);
             Settings.Default.StartupRibbonMinimized = StartupRibbonMinimized;
             Settings.Default.StartupErrorLogLevel = StartupErrorLogLevel;
             Settings.Default.PagingEnabled = PagingEnabled;
             Settings.Default.PagingSize = PagingSize;
             Settings.Default.ShowChangeLogAtStartUp = false;
-            Settings.Default.FontSize = FontSize;
             Settings.Default.IncludeText = IncludeText;
             Settings.Default.SearchAlsoInSourceAndModule = SearchAlsoInSourceAndModule;
             Settings.Default.IdleMode = IdleMode;
@@ -241,22 +582,48 @@ namespace Analogy
             Settings.Default.UpdateMode = (int)UpdateMode;
             Settings.Default.LastVersionChecked = JsonConvert.SerializeObject(LastVersionChecked);
             Settings.Default.MinimizedToTrayBar = MinimizedToTrayBar;
-            Settings.Default.CheckAdditionalInformation=CheckAdditionalInformation;
+            Settings.Default.CheckAdditionalInformation = CheckAdditionalInformation;
             Settings.Default.AnalogyPosition = JsonConvert.SerializeObject(AnalogyPosition);
-            Settings.Default.Save();
+            Settings.Default.EnableCompressedArchives = EnableCompressedArchives;
+            Settings.Default.IsBuiltInSearchPanelVisible = IsBuiltInSearchPanelVisible;
+            Settings.Default.BuiltInSearchPanelMode = BuiltInSearchPanelMode.ToString();
+            Settings.Default.ApplicationStyle = ApplicationStyle.ToString();
+            Settings.Default.ApplicationSvgPaletteName = ApplicationSvgPaletteName;
+            Settings.Default.ShowMessageDetails = ShowMessageDetails;
+            Settings.Default.SimpleMode = SimpleMode;
+            Settings.Default.LogLevelSelection = LogLevelSelection.ToString();
+            Settings.Default.ShowWhatIsNewAtStartup = ShowWhatIsNewAtStartup;
+            Settings.Default.FontSettings = JsonConvert.SerializeObject(FontSettings);
+            Settings.Default.RibbonStyle = (int)RibbonStyle;
+            Settings.Default.EnableFirstChanceException = EnableFirstChanceException;
+            Settings.Default.TrackActiveMessage = TrackActiveMessage;
+            Settings.Default.RealTimeRefreshInterval = RealTimeRefreshInterval;
+            Settings.Default.FilteringExclusion = JsonConvert.SerializeObject(FilteringExclusion);
+            Settings.Default.UseCustomLogsLayout = UseCustomLogsLayout;
+            Settings.Default.LogsLayoutFileName = LogsLayoutFileName;
+            Settings.Default.ViewDetailedMessageWithHTML = ViewDetailedMessageWithHTML;
+            Settings.Default.MainFormType = MainFormType.ToString();
+            Settings.Default.TimeOffsetType = TimeOffsetType.None.ToString();
+            Settings.Default.DefaultUserLogFolder = DefaultUserLogFolder;
+            Settings.Default.TimeOffset = TimeOffset.TotalMilliseconds;
 
+            Settings.Default.Save();
         }
 
         public void AddToRecentFiles(Guid iD, string file)
         {
             AnalogyOpenedFiles += 1;
             if (!RecentFiles.Contains((iD, file)))
+            {
                 RecentFiles.Insert(0, (iD, file));
+            }
         }
         public void AddToRecentFolders(Guid iD, string path)
         {
             if (!RecentFolders.Contains((iD, path)))
+            {
                 RecentFolders.Insert(0, (iD, path));
+            }
         }
         public void ClearStatistics()
         {
@@ -302,7 +669,10 @@ namespace Analogy
         public void UpdateOrder(List<Guid> order)
         {
             if (FactoriesOrder.SequenceEqual(order))
+            {
                 return;
+            }
+
             FactoriesOrder = order;
             OnFactoryOrderChanged?.Invoke(this, new EventArgs());
         }
@@ -317,14 +687,20 @@ namespace Analogy
             if (include)
             {
                 if (LastSearchesInclude.Contains(text, StringComparison.InvariantCultureIgnoreCase))
+                {
                     return false;
+                }
+
                 LastSearchesInclude.Add(text);
                 return true;
             }
             else
             {
                 if (LastSearchesExclude.Contains(text, StringComparison.InvariantCultureIgnoreCase))
+                {
                     return false;
+                }
+
                 LastSearchesExclude.Add(text);
                 return true;
             }
@@ -334,7 +710,10 @@ namespace Analogy
         {
             return AnalogyIcon == "Dark" ? Resources.AnalogyIconDark : Resources.AnalogyIconLight;
         }
-
+        public Image GetImage()
+        {
+            return AnalogyIcon == "Dark" ? Resources.AnalogyDark : Resources.AnalogyLight;
+        }
 
         public IEnumerable<(Guid ID, string FileName)> GetRecentFiles(Guid offlineAnalogyId) =>
             RecentFiles.Where(itm => itm.ID == offlineAnalogyId);
@@ -342,36 +721,37 @@ namespace Analogy
         public IEnumerable<(Guid ID, string Path)> GetRecentFolders(Guid offlineAnalogyId) =>
             RecentFolders.Where(itm => itm.ID == offlineAnalogyId);
 
-    }
-    [Serializable]
-    public class LogParserSettingsContainer
-    {
-        public ILogParserSettings NLogParserSettings { get; set; }
-
-        public LogParserSettingsContainer()
+        public void ResetSettings()
         {
-            NLogParserSettings = new LogParserSettings();
-            NLogParserSettings.Splitter = "|";
-
+            Settings.Default.Reset();
+            Settings.Default.UpgradeRequired = false;
+            Settings.Default.Save();
+            ShowWhatIsNewAtStartup = true;
+            SettingsMode = SettingsMode.PerUser;
+            MainFormType = MainFormType.RibbonForm;
+            TimeOffsetType = TimeOffsetType.None;
+            LoadPerUserSettings();
         }
-
     }
+
     [Serializable]
     public class ColorSettings
     {
-        public Dictionary<AnalogyLogLevel, Color> LogLevelColors { get; set; }
+        public bool EnableMessagesColors { get; set; }
+        public Dictionary<AnalogyLogLevel, (Color BackgroundColor, Color TextColor)> LogLevelColors { get; set; }
 
-        public Color HighlightColor { get; set; }
-        public Color NewMessagesColor { get; set; }
+        public (Color BackgroundColor, Color TextColor) HighlightColor { get; set; }
+        public (Color BackgroundColor, Color TextColor) NewMessagesColor { get; set; }
         public bool EnableNewMessagesColor { get; set; }
         public bool OverrideLogLevelColor { get; set; }
 
         public ColorSettings()
         {
-            HighlightColor = Color.Aqua;
-            NewMessagesColor = Color.PaleTurquoise;
+            EnableMessagesColors = true;
+            HighlightColor = (Color.Aqua, Color.Black);
+            NewMessagesColor = (Color.PaleTurquoise, Color.Black);
             var logLevelValues = Enum.GetValues(typeof(AnalogyLogLevel));
-            LogLevelColors = new Dictionary<AnalogyLogLevel, Color>(logLevelValues.Length);
+            LogLevelColors = new Dictionary<AnalogyLogLevel, (Color BackgroundColor, Color TextColor)>(logLevelValues.Length);
 
             foreach (AnalogyLogLevel level in logLevelValues)
 
@@ -379,34 +759,34 @@ namespace Analogy
                 switch (level)
                 {
                     case AnalogyLogLevel.Unknown:
-                        LogLevelColors.Add(level, Color.White);
+                        LogLevelColors.Add(level, (Color.White, Color.Black));
                         break;
-                    case AnalogyLogLevel.Disabled:
-                        LogLevelColors.Add(level, Color.LightGray);
+                    case AnalogyLogLevel.None:
+                        LogLevelColors.Add(level, (Color.LightGray, Color.Black));
                         break;
                     case AnalogyLogLevel.Trace:
-                        LogLevelColors.Add(level, Color.White);
+                        LogLevelColors.Add(level, (Color.White, Color.Black));
                         break;
                     case AnalogyLogLevel.Verbose:
-                        LogLevelColors.Add(level, Color.White);
+                        LogLevelColors.Add(level, (Color.White, Color.Black));
                         break;
                     case AnalogyLogLevel.Debug:
-                        LogLevelColors.Add(level, Color.White);
+                        LogLevelColors.Add(level, (Color.White, Color.Black));
                         break;
-                    case AnalogyLogLevel.Event:
-                        LogLevelColors.Add(level, Color.White);
+                    case AnalogyLogLevel.Information:
+                        LogLevelColors.Add(level, (Color.White, Color.Black));
                         break;
                     case AnalogyLogLevel.Warning:
-                        LogLevelColors.Add(level, Color.Yellow);
+                        LogLevelColors.Add(level, (Color.Yellow, Color.Black));
                         break;
                     case AnalogyLogLevel.Error:
-                        LogLevelColors.Add(level, Color.Pink);
+                        LogLevelColors.Add(level, (Color.Pink, Color.Black));
                         break;
                     case AnalogyLogLevel.Critical:
-                        LogLevelColors.Add(level, Color.Red);
+                        LogLevelColors.Add(level, (Color.Red, Color.Black));
                         break;
-                    case AnalogyLogLevel.AnalogyInformation:
-                        LogLevelColors.Add(level, Color.White);
+                    case AnalogyLogLevel.Analogy:
+                        LogLevelColors.Add(level, (Color.White, Color.Black));
                         break;
                     default:
                         throw new ArgumentOutOfRangeException();
@@ -415,14 +795,14 @@ namespace Analogy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Color GetColorForLogLevel(AnalogyLogLevel level) => LogLevelColors[level];
+        public (Color BackgroundColor, Color TextColor) GetColorForLogLevel(AnalogyLogLevel level) => LogLevelColors[level];
 
-        public Color GetHighlightColor() => HighlightColor;
-        public Color GetNewMessagesColor() => NewMessagesColor;
+        public (Color BackgroundColor, Color TextColor) GetHighlightColor() => HighlightColor;
+        public (Color BackgroundColor, Color TextColor) GetNewMessagesColor() => NewMessagesColor;
 
-        public void SetColorForLogLevel(AnalogyLogLevel level, Color value) => LogLevelColors[level] = value;
-        public void SetHighlightColor(Color value) => HighlightColor = value;
-        public void SetNewMessagesColor(Color value) => NewMessagesColor = value;
+        public void SetColorForLogLevel(AnalogyLogLevel level, Color backgroundColor, Color textColor) => LogLevelColors[level] = (backgroundColor, textColor);
+        public void SetHighlightColor(Color backgroundColor, Color textColor) => HighlightColor = (backgroundColor, textColor);
+        public void SetNewMessagesColor(Color backgroundColor, Color textColor) => NewMessagesColor = (backgroundColor, textColor);
         public string AsJson() => JsonConvert.SerializeObject(this);
         public static ColorSettings FromJson(string fileName) => JsonConvert.DeserializeObject<ColorSettings>(fileName);
     }
@@ -442,7 +822,18 @@ namespace Analogy
         public override string ToString() => $"{nameof(FactoryName)}: {FactoryName}, {nameof(FactoryId)}: {FactoryId}, {nameof(Status)}: {Status}";
 
     }
+    [Serializable]
+    public class OnDemandPlottingFactorySettings
+    {
+        public Guid FactoryId { get; set; }
+        public DataProviderFactoryStatus Status { get; set; }
 
+        public OnDemandPlottingFactorySettings()
+        {
+        }
+        public override string ToString() => $"{nameof(FactoryId)}: {FactoryId}, {nameof(Status)}: {Status}";
+
+    }
     public enum PreDefinedQueryType
     {
         Contains,
@@ -471,18 +862,24 @@ namespace Analogy
         public void RemoveHighlight(PreDefineHighlight highlight)
         {
             if (Highlights.Contains(highlight))
+            {
                 Highlights.Remove(highlight);
+            }
         }
 
         public void RemoveFilter(PreDefineFilter filter)
         {
             if (Filters.Contains(filter))
+            {
                 Filters.Remove(filter);
+            }
         }
         public void RemoveAlert(PreDefineAlert alert)
         {
             if (Alerts.Contains(alert))
+            {
                 Alerts.Remove(alert);
+            }
         }
     }
     [Serializable]

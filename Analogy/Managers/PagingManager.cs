@@ -1,11 +1,11 @@
-﻿using System;
+﻿using Analogy.DataTypes;
+using Analogy.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
-using Analogy.Interfaces;
-using Analogy.Types;
 
 namespace Analogy
 {
@@ -14,7 +14,7 @@ namespace Analogy
         //public List<string> CurrentColumns { get; set; }
         private static ManualResetEvent columnAdderSync = new ManualResetEvent(false);
         public ReaderWriterLockSlim columnsLockSlim = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
-        private readonly UCLogs owner;
+        private readonly UserControl owner;
         public event EventHandler<AnalogyClearedHistoryEventArgs> OnHistoryCleared;
         public event EventHandler<AnalogyPagingChanged> OnPageChanged;
         public ReaderWriterLockSlim lockSlim = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
@@ -42,7 +42,7 @@ namespace Analogy
 
         public static int TotalMissedMessages => _totalMissedMessages;
 
-        public PagingManager(UCLogs owner)
+        public PagingManager(UserControl owner)
         {
             //CurrentColumns = new List<string>();
             this.owner = owner;
@@ -71,32 +71,38 @@ namespace Analogy
 
         public void ClearLogs()
         {
-            AnalogyPageInformation analogyPage;
-            lockSlim.EnterWriteLock();
+            lockSlim.EnterWriteLock(); 
+            var oldMessages = allMessages.ToList();
             try
             {
-                var oldMessages = allMessages.ToList();
                 pages = new List<DataTable>();
                 currentPageStartRowIndex = 0;
                 currentPageNumber = 1;
                 var first = Utils.DataTableConstructor();
                 currentTable = first;
                 pages.Add(first);
-                OnHistoryCleared?.Invoke(this, new AnalogyClearedHistoryEventArgs(oldMessages));
-                analogyPage = new AnalogyPageInformation(currentTable, 1, currentPageStartRowIndex);
             }
             finally
             {
                 lockSlim.ExitWriteLock();
             }
-
+            OnHistoryCleared?.Invoke(this, new AnalogyClearedHistoryEventArgs(oldMessages));
+            AnalogyPageInformation analogyPage = new AnalogyPageInformation(currentTable, 1, currentPageStartRowIndex);
             OnPageChanged?.Invoke(this, new AnalogyPagingChanged(analogyPage));
         }
 
         public DataRow AppendMessage(AnalogyLogMessage message, string dataSource)
         {
+            try
+            {
+                lockSlim.EnterWriteLock();
+                allMessages.Add(message);
+            }
+            finally
+            {
+                lockSlim.ExitWriteLock();
+            }
             var table = pages.Last();
-            allMessages.Add(message);
             if (table.Rows.Count + 1 > pageSize)
             {
                 table = Utils.DataTableConstructor();
@@ -104,12 +110,15 @@ namespace Analogy
                 var pageStartRowIndex = (pages.Count - 1) * pageSize;
                 OnPageChanged?.Invoke(this, new AnalogyPagingChanged(new AnalogyPageInformation(table, pages.Count, pageStartRowIndex)));
             }
+
+            if (message.AdditionalInformation != null && message.AdditionalInformation.Any() && Settings.CheckAdditionalInformation)
+            {
+                AddExtraColumnsIfNeeded(table, message);
+            }
             try
             {
-                if (message.AdditionalInformation != null && message.AdditionalInformation.Any() && Settings.CheckAdditionalInformation)
-                    AddExtraColumnsIfNeeded(table, message);
                 lockSlim.EnterWriteLock();
-                DataRow dtr = Utils.CreateRow(table, message, dataSource,Settings.CheckAdditionalInformation);
+                DataRow dtr = Utils.CreateRow(table, message, dataSource, Settings.CheckAdditionalInformation);
                 table.Rows.Add(dtr);
                 return dtr;
 
@@ -122,25 +131,42 @@ namespace Analogy
 
         public List<(DataRow, AnalogyLogMessage)> AppendMessages(List<AnalogyLogMessage> messages, string dataSource)
         {
+
             var table = pages.Last();
             var countInsideTable = table.Rows.Count;
             List<(DataRow row, AnalogyLogMessage message)> rows = new List<(DataRow row, AnalogyLogMessage message)>(messages.Count);
             foreach (var message in messages)
             {
-
-                if (message.Level == AnalogyLogLevel.Disabled)
+                if (message.Level == AnalogyLogLevel.None)
+                {
                     continue; //ignore those messages
-                allMessages.Add(message);
+                }
+                try
+                {
+                    lockSlim.EnterWriteLock();
+                    allMessages.Add(message);
+                }
+                finally
+                {
+                    lockSlim.ExitWriteLock();
+                }
                 if (countInsideTable + 1 > pageSize)
                 {
                     table = Utils.DataTableConstructor();
                     pages.Add(table);
                     countInsideTable = 0;
                     var pageStartRowIndex = (pages.Count - 1) * pageSize;
-                    OnPageChanged?.Invoke(this, new AnalogyPagingChanged(new AnalogyPageInformation(table, pages.Count, pageStartRowIndex)));
+                    OnPageChanged?.Invoke(this,
+                        new AnalogyPagingChanged(new AnalogyPageInformation(table, pages.Count,
+                            pageStartRowIndex)));
                 }
-                if (message.AdditionalInformation != null && message.AdditionalInformation.Any() && Settings.CheckAdditionalInformation)
+
+                if (message.AdditionalInformation != null && message.AdditionalInformation.Any() &&
+                    Settings.CheckAdditionalInformation)
+                {
                     AddExtraColumnsIfNeeded(table, message);
+                }
+
                 countInsideTable++;
                 try
                 {
@@ -165,30 +191,49 @@ namespace Analogy
                 foreach (KeyValuePair<string, string> info in message.AdditionalInformation)
                 {
 
-                    if (!currentTable.Columns.Contains(info.Key))
+                    if (!table.Columns.Contains(info.Key))
                     {
                         if (!owner.InvokeRequired)
                         {
-                            columnsLockSlim.EnterWriteLock();
-                            if (!currentTable.Columns.Contains(info.Key))
+                            try
                             {
-                                table.Columns.Add(info.Key);
+                                columnsLockSlim.EnterWriteLock();
+                                if (!table.Columns.Contains(info.Key))
+                                {
+                                    table.Columns.Add(info.Key);
+                                }
+                            }
+                            finally
+                            {
+                                columnsLockSlim.ExitWriteLock();
                             }
 
-                            columnsLockSlim.ExitWriteLock();
+
+
                         }
                         else
                         {
                             owner.BeginInvoke(new MethodInvoker(() =>
                             {
-                                columnsLockSlim.EnterWriteLock();
-                                if (!currentTable.Columns.Contains(info.Key))
+                                try
                                 {
-                                    table.Columns.Add(info.Key);
-                                    columnAdderSync.Set();
 
+                                    columnsLockSlim.EnterWriteLock();
+                                    if (!table.Columns.Contains(info.Key))
+                                    {
+                                        columnsLockSlim.EnterWriteLock();
+                                        if (!table.Columns.Contains(info.Key))
+                                        {
+                                            table.Columns.Add(info.Key);
+                                            columnAdderSync.Set();
+                                        }
+
+                                    }
                                 }
-                                columnsLockSlim.ExitWriteLock();
+                                finally
+                                {
+                                    columnsLockSlim.ExitWriteLock();
+                                }
                             }));
                             columnAdderSync.WaitOne();
                             columnAdderSync.Reset();
@@ -248,10 +293,16 @@ namespace Analogy
 
         public List<AnalogyLogMessage> GetAllMessages()
         {
-            lockSlim.EnterReadLock();
-            var items = allMessages.ToList();
-            lockSlim.ExitReadLock();
-            return items;
+            try
+            {
+                lockSlim.EnterReadLock();
+                var items = allMessages.ToList();
+                return items;
+            }
+            finally
+            {
+                lockSlim.ExitReadLock();
+            }
         }
 
         public DataTable CurrentPage()
@@ -274,6 +325,22 @@ namespace Analogy
         public void IncrementTotalMissedMessages()
         {
             Interlocked.Increment(ref _totalMissedMessages);
+        }
+
+        public void UpdateOffsets()
+        {
+            lockSlim.EnterWriteLock();
+            foreach (DataTable dataTable in pages)
+            {
+                foreach (DataRow dataTableRow in dataTable.Rows)
+                {
+                    dataTableRow.BeginEdit();
+                    AnalogyLogMessage m = (AnalogyLogMessage)dataTableRow["Object"];
+                    dataTableRow["Date"] = Utils.GetOffsetTime(m.Date);
+                    dataTableRow.EndEdit();
+                }
+            }
+            lockSlim.ExitWriteLock();
         }
     }
 

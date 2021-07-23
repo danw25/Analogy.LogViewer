@@ -1,5 +1,5 @@
-﻿using Analogy.Interfaces;
-using Analogy.Types;
+﻿using Analogy.DataTypes;
+using Analogy.Interfaces;
 using DevExpress.XtraBars;
 using System;
 using System.Collections.Generic;
@@ -9,6 +9,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Analogy.Properties;
+using DevExpress.Utils.Menu;
+using DevExpress.XtraTreeList;
+using DevExpress.XtraTreeList.Localization;
 
 namespace Analogy
 {
@@ -20,31 +24,33 @@ namespace Analogy
         private IAnalogyOfflineDataProvider DataProvider { get; }
         public ILogMessageCreatedHandler Handler => ucLogs1;
         //private List<string> TreeListFileNodes { get; set; }
-        public LocalLogFilesUC(string initSelectedPath = null)
+        public LocalLogFilesUC(string? initSelectedPath = null)
         {
-            SelectedPath = initSelectedPath;
+            SelectedPath = initSelectedPath ?? string.Empty;
             InitializeComponent();
             treeList1.Columns["colChanged"].SortOrder = SortOrder.Descending;
             treeList1.Appearance.HideSelectionRow.Assign(treeList1.ViewInfo.PaintAppearance.FocusedRow);
             ucLogs1.SetSaveButtonsVisibility(false);
         }
 
-        public LocalLogFilesUC(IAnalogyOfflineDataProvider dataProvider, string[] fileNames = null, string initialSelectedPath = null) : this(initialSelectedPath)
+        public LocalLogFilesUC(IAnalogyOfflineDataProvider dataProvider, string[]? fileNames = null, string? initialSelectedPath = null) : this(initialSelectedPath)
         {
 
             DataProvider = dataProvider;
             if (fileNames != null)
+            {
                 extrenalFiles.AddRange(fileNames);
+            }
+
             ucLogs1.SetFileDataSource(dataProvider, dataProvider);
         }
 
-        public LocalLogFilesUC(IAnalogyDataProvider dataProvider,CancellationTokenSource cts) : this()
+        public LocalLogFilesUC(IAnalogyDataProvider dataProvider, CancellationTokenSource cts) : this()
         {
             ucLogs1.SetFileDataSource(dataProvider, null);
             ucLogs1.CancellationTokenSource = cts;
         }
 
-        public void ShowFolderAndFilesPanel(bool on) => spltMain.Panel1Collapsed = !on;
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             ucLogs1.ProcessCmdKeyFromParent(keyData);
@@ -52,14 +58,20 @@ namespace Analogy
         }
         private async void OfflineUCLogs_Load(object sender, EventArgs e)
         {
-            if (DesignMode) return;
+            if (DesignMode)
+            {
+                return;
+            }
+
             folderTreeViewUC1.FolderChanged += FolderTreeViewUC1_FolderChanged;
             ucLogs1.btswitchRefreshLog.Visibility = BarItemVisibility.Never;
             ucLogs1.btsAutoScrollToBottom.Visibility = BarItemVisibility.Never;
             if (extrenalFiles.Any())
             {
                 if (File.Exists(extrenalFiles.First()))
+                {
                     SelectedPath = Path.GetDirectoryName(extrenalFiles.First());
+                }
             }
 
             folderTreeViewUC1.SetFolder(SelectedPath, DataProvider);
@@ -87,7 +99,7 @@ namespace Analogy
             }
         }
 
-        private void FolderTreeViewUC1_FolderChanged(object sender, Types.FolderSelectionEventArgs e)
+        private void FolderTreeViewUC1_FolderChanged(object sender, FolderSelectionEventArgs e)
         {
             if (Directory.Exists(e.SelectedFolderPath))
             {
@@ -99,19 +111,28 @@ namespace Analogy
             e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
         private async void AnalogyUCLogs_DragDrop(object sender, DragEventArgs e)
         {
-            if (DataProvider == null) return;
+            if (DataProvider == null)
+            {
+                return;
+            }
+
             string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
             await LoadFilesAsync(files.ToList(), chkbSelectionMode.Checked);
         }
 
         private void PopulateFiles(string folder)
         {
-            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder) || DataProvider == null) return;
+            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder) || DataProvider == null)
+            {
+                return;
+            }
+
             SelectedPath = folder;
             treeList1.SelectionChanged -= TreeList1_SelectionChanged;
-            bool recursiveLoad = checkEditRecursiveLoad.Checked;
+            bool isRoot = Directory.GetLogicalDrives().Any(d => d.Equals(SelectedPath, StringComparison.OrdinalIgnoreCase));
+            bool recursiveLoad = checkEditRecursiveLoad.Checked && !isRoot;
             DirectoryInfo dirInfo = new DirectoryInfo(folder);
-            UserSettingsManager.UserSettings.AddToRecentFolders(DataProvider.ID, folder);
+            UserSettingsManager.UserSettings.AddToRecentFolders(DataProvider.Id, folder);
             List<FileInfo> fileInfos = DataProvider.GetSupportedFiles(dirInfo, recursiveLoad).Distinct(new FileInfoComparer()).ToList();
             treeList1.Nodes.Clear();
             // TreeListFileNodes.Clear();
@@ -120,10 +141,13 @@ namespace Analogy
                 treeList1.Nodes.Add(fi.Name, fi.LastWriteTime, fi.Length, fi.FullName);
                 // TreeListFileNodes.Add(fi.FullName);
             }
-
-            treeList1.BestFitColumns();
             treeList1.ClearSelection();
-
+            //treeList1.TopVisibleNodeIndex = 0;
+            treeList1.BestFitColumns();
+            if (treeList1.Nodes.Any())
+            {
+                treeList1.MakeNodeVisible(treeList1.Nodes.FirstNode);
+            }
             treeList1.SelectionChanged += TreeList1_SelectionChanged;
         }
 
@@ -140,7 +164,11 @@ namespace Analogy
             if (treeList1.Selection.Any())
             {
                 var filename = (string)treeList1.Selection.First().GetValue(colFullPath);
-                if (filename == null || !File.Exists(filename)) return;
+                if (filename == null || !File.Exists(filename))
+                {
+                    return;
+                }
+
                 Process.Start("explorer.exe", "/select, \"" + filename + "\"");
             }
         }
@@ -150,11 +178,16 @@ namespace Analogy
             if (treeList1.Selection.Any())
             {
                 var filename = (string)treeList1.Selection.First().GetValue(colFullPath);
-                if (filename == null || !File.Exists(filename)) return;
+                if (filename == null || !File.Exists(filename))
+                {
+                    return;
+                }
+
                 var result = MessageBox.Show($"Are you sure you want to delete {filename}?", "Delete confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
                 if (result == DialogResult.Yes)
                 {
                     if (File.Exists(filename))
+                    {
                         try
                         {
                             File.Delete(filename);
@@ -164,6 +197,7 @@ namespace Analogy
                         {
                             MessageBox.Show(exception.Message, @"Error deleting file", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         }
+                    }
                 }
             }
 
@@ -185,6 +219,37 @@ namespace Analogy
             await LoadFilesAsync(files, chkbSelectionMode.Checked);
         }
 
+        private async void treeList1_RowClick(object sender, DevExpress.XtraTreeList.RowClickEventArgs e)
+        {
+  
+        }
+
+        private void treeList1_PopupMenuShowing(object sender, DevExpress.XtraTreeList.PopupMenuShowingEventArgs e)
+        {
+            async void OpenFileInSeparateWindow(string filename)
+            {
+                ucLogs1.OnFocusedRowChanged -= UcLogs1_OnFocusedRowChanged;
+                await ucLogs1.LoadFileInSeparateWindow(filename);
+                ucLogs1.OnFocusedRowChanged += UcLogs1_OnFocusedRowChanged;
+            }
+
+            
+                TreeList treeList = sender as TreeList;
+                TreeListHitInfo hitInfo = treeList.CalcHitInfo(e.Point);
+
+                // removing the "Runtime columns customization" item of the column header menu
+                if (hitInfo.HitInfoType == HitInfoType.Cell)
+                {
+                    var file = hitInfo.Node.GetValue(colFullPath).ToString();
+
+                    DXMenuItem menuItem = new DXMenuItem($"Open file {Path.GetFileName(file)} in separate Window",
+                        (_, __) => { OpenFileInSeparateWindow(file); }) {Tag = hitInfo.Column};
+                   //menuItem.Image =Resources.
+                    e.Menu.Items.Add(menuItem);
+                }
+            
+
+        }
     }
 
 }

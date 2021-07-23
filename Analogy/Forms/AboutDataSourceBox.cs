@@ -5,7 +5,7 @@ using System.Reflection;
 using Analogy.Interfaces.Factories;
 using DevExpress.XtraEditors;
 
-namespace Analogy
+namespace Analogy.Forms
 {
     partial class AboutDataSourceBox : XtraForm
     {
@@ -95,15 +95,20 @@ namespace Analogy
 
         private void AboutDataSourceBox_Load(object sender, EventArgs e)
         {
-            this.Text = $"About {AssemblyTitle}";
-            this.labelProductName.Text = AssemblyProduct;
-            this.labelVersion.Text = $"Version {AssemblyVersion}";
-            this.labelCopyright.Text = AssemblyCopyright;
-            this.labelCompanyName.Text = AssemblyCompany;
-            this.textBoxDescription.Text = $"{AssemblyDescription}{Environment.NewLine}{_factory.About}";
-            rtxtChangeLog.Text = string.Join(Environment.NewLine,
+            Text = $"About {AssemblyTitle}";
+            labelProductName.Text = AssemblyProduct;
+            labelVersion.Text = $"Version {AssemblyVersion}";
+            labelCopyright.Text = AssemblyCopyright;
+            labelCompanyName.Text = AssemblyCompany;
+            meDescription.Text = $"{AssemblyDescription}{Environment.NewLine}{_factory.About}";
+            meChangeLog.Text = string.Join(Environment.NewLine,
                 _factory.ChangeLog.OrderByDescending(c => c.Date).Select(cl => $"{cl.Date.ToShortDateString()}: {cl.ChangeInformation} ({cl.Name})"));
-            rtxtContributions.Text = string.Join(Environment.NewLine, _factory.Contributors);
+            meContributions.Text = string.Join(Environment.NewLine, _factory.Contributors);
+        }
+
+        private void btnOK_Click(object sender, EventArgs e)
+        {
+            Close();
         }
     }
 }

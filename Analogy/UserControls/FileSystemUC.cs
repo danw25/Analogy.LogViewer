@@ -1,11 +1,11 @@
 ﻿using Analogy.Interfaces;
-using Analogy.Types;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using Analogy.DataTypes;
 
 namespace Analogy
 {
@@ -38,7 +38,7 @@ namespace Analogy
             lBoxFiles.SelectedIndexChanged -= lBoxFiles_SelectedIndexChanged;
             DirectoryInfo dirInfo = new DirectoryInfo(e.SelectedFolderPath);
             bool recursive = checkEditRecursiveLoad.Checked;
-            UserSettingsManager.UserSettings.AddToRecentFolders(DataProvider.ID, e.SelectedFolderPath);
+            UserSettingsManager.UserSettings.AddToRecentFolders(DataProvider.Id, e.SelectedFolderPath);
             List<FileInfo> fileInfos = DataProvider.GetSupportedFiles(dirInfo, recursive).Distinct(new FileInfoComparer()).OrderByDescending(f => f.LastWriteTime).ToList();
             lBoxFiles.DisplayMember = recursive ? "FullName" : "Name";
             lBoxFiles.DataSource = fileInfos;
@@ -64,7 +64,11 @@ namespace Analogy
             if (lBoxFiles.SelectedItem != null)
             {
                 var filename = (lBoxFiles.SelectedItem as FileInfo)?.FullName;
-                if (filename == null || !File.Exists(filename)) return;
+                if (filename == null || !File.Exists(filename))
+                {
+                    return;
+                }
+
                 Process.Start("explorer.exe", "/select, \"" + filename + "\"");
             }
         }

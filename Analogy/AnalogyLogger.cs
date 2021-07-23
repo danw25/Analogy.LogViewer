@@ -10,7 +10,7 @@ namespace Analogy
 {
     public class AnalogyLogger: IAnalogyLogger
     {
-        public static readonly Lazy<IAnalogyLogger> _instance = new Lazy<IAnalogyLogger>(()=>new AnalogyLogger());
+        private static readonly Lazy<IAnalogyLogger> _instance = new Lazy<IAnalogyLogger>(()=>new AnalogyLogger());
         public static IAnalogyLogger Instance => _instance.Value;
         private string DateTimeWithMilliseconds => DateTime.Now.ToString("MM/dd/yyyy hh:mm:ss.fff tt", DateTimeFormatInfo.InvariantInfo);
         private static readonly Process CurrentProcess = Process.GetCurrentProcess();
@@ -19,36 +19,24 @@ namespace Analogy
         {
             
         }
-        public virtual void LogEvent(string source, string message, [CallerMemberName] string memberName = "" , [CallerLineNumber] int lineNumber = 0, [CallerFilePath] string filePath = "")
-        {
-            AnalogyLogManager.Instance.LogEvent(GetFormattedString(message, memberName, lineNumber, filePath), source);
-        }
 
-        public virtual void LogWarning(string source, string message, [CallerMemberName] string memberName = "" , [CallerLineNumber] int lineNumber = 0, [CallerFilePath] string filePath = "")
-        {
-            AnalogyLogManager.Instance.LogWarning(GetFormattedString(message, memberName, lineNumber, filePath), source);
-        }
+        public void LogInformation(string message, string source = "", string memberName = "", int lineNumber = 0, string filePath = "")
+            => AnalogyLogManager.Instance.LogInformation(GetFormattedString(message, memberName, lineNumber, filePath), source);
 
-        public virtual void LogDebug(string source, string message, [CallerMemberName] string memberName = "" , [CallerLineNumber] int lineNumber = 0, [CallerFilePath] string filePath = "")
-        {
-            AnalogyLogManager.Instance.LogDebug(GetFormattedString(message, memberName, lineNumber, filePath), source);
-        }
+        public void LogWarning(string message, string source = "", string memberName = "", int lineNumber = 0, string filePath = "")
+            => AnalogyLogManager.Instance.LogWarning(GetFormattedString(message, memberName, lineNumber, filePath), source);
 
-        public virtual void LogError(string source, string message, [CallerMemberName] string memberName = "" , [CallerLineNumber] int lineNumber = 0, [CallerFilePath] string filePath = "")
-        {
-            AnalogyLogManager.Instance.LogError("Error: " + GetFormattedString(message, memberName, lineNumber, filePath),source);
-        }
+        public void LogDebug(string message, string source = "", string memberName = "", int lineNumber = 0, string filePath = "")
+            => AnalogyLogManager.Instance.LogDebug(GetFormattedString(message, memberName, lineNumber, filePath), source);
 
-        public virtual void LogCritical(string source, string message, [CallerMemberName] string memberName = "" , [CallerLineNumber] int lineNumber = 0, [CallerFilePath] string filePath = "")
-        {
-            AnalogyLogManager.Instance.LogCritical(GetFormattedString(message, memberName, lineNumber, filePath), source);
-        }
+        public void LogError(string message, string source = "", string memberName = "", int lineNumber = 0, string filePath = "")
+            => AnalogyLogManager.Instance.LogError(GetFormattedString(message, memberName, lineNumber, filePath), source);
 
-        public virtual void LogException(Exception ex, string source, string message, [CallerMemberName] string memberName = "" , [CallerLineNumber] int lineNumber = 0, [CallerFilePath] string filePath = "")
-        {
-            LogError(source,$"Error: {GetFormattedString(message,memberName,lineNumber,filePath)}. Exception: {ex}");
+        public void LogCritical(string message, string source = "", string memberName = "", int lineNumber = 0, string filePath = "")
+       => AnalogyLogManager.Instance.LogCritical(GetFormattedString(message, memberName, lineNumber, filePath), source);
+        public void LogException(string message, Exception ex, string source = "", string memberName = "", int lineNumber = 0, string filePath = "")
+       => LogError($"Error: {GetFormattedString(message,memberName,lineNumber,filePath)}. Exception: {ex}", source);
 
-        }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string GetFormattedString(string message, string memberName, int lineNumber, string filePath) =>
             $"{message}. Member:{memberName}. Line:{lineNumber}. Thread (managedID):{Thread.CurrentThread.ManagedThreadId}. Start Time:{ProcessStartTime}. Time:{DateTimeWithMilliseconds}. File: {filePath}";

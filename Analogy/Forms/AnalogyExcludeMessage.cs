@@ -1,13 +1,13 @@
-﻿using Analogy.Interfaces;
-using DevExpress.XtraEditors;
-using System;
+﻿using System;
 using System.Windows.Forms;
+using Analogy.Interfaces;
+using DevExpress.XtraEditors;
 
-namespace Analogy
+namespace Analogy.Forms
 {
     public partial class AnalogyExcludeMessage : XtraForm
     {
-        public string Exclude { get; set; }
+        public string MessageText { get; set; }
         public AnalogyExcludeMessage()
         {
             InitializeComponent();
@@ -20,7 +20,7 @@ namespace Analogy
         }
         private void sBtnOk_Click(object sender, EventArgs e)
         {
-            Exclude = FilterCriteriaObject.EscapeLikeValue(txtbMessage.Text);
+            MessageText = FilterCriteriaObject.EscapeLikeValue(txtbMessage.Text);
             DialogResult = DialogResult.OK;
             Close();
         }

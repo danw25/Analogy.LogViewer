@@ -1,7 +1,7 @@
-﻿using DevExpress.XtraEditors;
-using System;
+﻿using System;
+using DevExpress.XtraEditors;
 
-namespace Analogy
+namespace Analogy.Forms
 {
     public partial class ChangeLog : XtraForm
     {
@@ -18,6 +18,7 @@ namespace Analogy
         private void ChangeLog_Load(object sender, EventArgs e)
         {
             Icon = UserSettingsManager.UserSettings.GetIcon();
+            rtxtbChangeLog.Text = CommonChangeLog.GetChangeLogFull + Environment.NewLine + rtxtbChangeLog.Text;
         }
     }
 }

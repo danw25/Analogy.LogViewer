@@ -5,6 +5,8 @@ namespace Analogy.Forms
 {
     public partial class UpdateForm : DevExpress.XtraEditors.XtraForm
     {
+        private UpdateManager Updater => UpdateManager.Instance;
+        private UserSettingsManager Settings => UserSettingsManager.UserSettings;
 
         public UpdateForm()
         {
@@ -13,26 +15,52 @@ namespace Analogy.Forms
 
         private void UpdateForm_Load(object sender, EventArgs e)
         {
-            Icon = UserSettingsManager.UserSettings.GetIcon();
-            lblCurrentVersion.Text = $"Your current version is: V{UpdateManager.Instance.CurrentVersion}";
+            Icon = Settings.GetIcon();
+            lblCurrentVersion.Text =
+                $"Your current version is: V{Updater.CurrentVersion}. (Target Framework:{Updater.CurrentFrameworkAttribute.FrameworkName})";
             lblLatestVersion.Text =
-                $"Latest version is: {(UpdateManager.Instance.LastVersionChecked == null || UpdateManager.Instance.LastVersionChecked.TagName == null ? "not checked" : UpdateManager.Instance.LastVersionChecked.TagName)}";
+                $"Latest version is: {(Updater.LastVersionChecked?.TagName == null ? "not checked" : Updater.LastVersionChecked.TagName)}";
 
-            if (UpdateManager.Instance.LastVersionChecked != null && UpdateManager.Instance.LastVersionChecked.TagName != null)
+            if (AnalogyNonPersistSettings.Instance.UpdateAreDisabled)
             {
-                richTextBoxRelease.Text = UpdateManager.Instance.LastVersionChecked.ToString();
-                hyperLinkEditLatest.Text = UpdateManager.Instance.LastVersionChecked.HtmlUrl;
+                AnalogyLogManager.Instance.LogWarning("Update is disabled", nameof(UpdateForm));
+                sbtnUpdateNow.Visible = false;
+                sbtnCheck.Visible = false;
+                lblDisableUpdates.Visible = true;
+                return;
+            }
+
+            if (Updater.LastVersionChecked?.TagName != null)
+            {
+                richTextBoxRelease.Text = Updater.LastVersionChecked.ToString();
+                hyperLinkEditLatest.Text = Updater.LastVersionChecked.HtmlUrl;
+                if (Updater.NewVersionExist)
+                {
+                    sbtnUpdateNow.Visible = true;
+                }
             }
         }
 
-        private async void sbtnCheck_Click(object sender, EventArgs e)
+        private async void sbtnCheckUpdate_Click(object sender, EventArgs e)
         {
-            var (_, release) = await UpdateManager.Instance.CheckVersion(true);
-            UserSettingsManager.UserSettings.LastVersionChecked = release;
-            lblLatestVersion.Text = "Latest version is: " + release.TagName;
+            var (_, release) = await Updater.CheckVersion(true);
+            Settings.LastVersionChecked = release;
+            string preRelease = release.PreRelease ? " (This is pre-release version)" : string.Empty;
+            lblLatestVersion.Text = $"Latest version is: {release.TagName}{preRelease}.";
             richTextBoxRelease.Text = release.ToString();
             hyperLinkEditLatest.Text = release.HtmlUrl;
+            if (Updater.NewVersionExist)
+            {
+                sbtnUpdateNow.Visible = true;
+            }
+        }
 
+        private async void sbtnUpdateNow_Click(object sender, EventArgs e)
+        {
+            var downloadInfo = Updater.DownloadInformation;
+            sbtnUpdateNow.Enabled = false;
+            await Updater.InitiateUpdate(downloadInfo.title, downloadInfo.DownloadURL,true);
+            sbtnUpdateNow.Enabled = true;
         }
     }
 }

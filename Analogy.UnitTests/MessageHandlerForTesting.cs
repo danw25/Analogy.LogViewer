@@ -1,15 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using Analogy.Interfaces;
+using Analogy.Interfaces.DataTypes;
 
 namespace Analogy.UnitTests
 {
     class MessageHandlerForTesting:ILogMessageCreatedHandler
     {
         private List<AnalogyLogMessage> messages;
+        public bool ForceNoFileCaching { get; set; }
+        public bool DoNotAddToRecentHistory { get; set; }
         public MessageHandlerForTesting()
         {
             messages=new List<AnalogyLogMessage>();
@@ -24,7 +23,9 @@ namespace Analogy.UnitTests
             this.messages.AddRange(messages);
         }
 
-        public bool ForceNoFileCaching { get; set; }
-        public bool DoNotAddToRecentHistory { get; set; }
+        public void ReportFileReadProgress(AnalogyFileReadProgress progress)
+        {
+            //noop
+        }
     }
 }

@@ -61,17 +61,21 @@ namespace Analogy
             get
             {
                 if (Left == null)
+                {
                     return Right.Value;
+                }
+
                 if (Right == null)
+                {
                     return Left.Value;
+                }
+
                 switch (Type)
                 {
                     case SearchType.And:
                         return $"Text like '%{EscapeLikeValue(Left.Value)}%' and Text like '%{EscapeLikeValue(Right.Value)}%'";
-                        break;
                     case SearchType.Or:
                         return $"Text like '%{EscapeLikeValue(Left.Value)}%' Or Text like '%{EscapeLikeValue(Right.Value)}%'";
-                        break;
                     default:
                         throw new ArgumentOutOfRangeException();
                 }
@@ -179,8 +183,13 @@ namespace Analogy
                         int j = i;
                         for (; j < tokens.Count; ++j)
 
+                        {
                             if (tokens[j].Type == SearchType.Rparentheses)
+                            {
                                 break;
+                            }
+                        }
+
                         var subexpression = tokens.Skip(i + 1).Take(j - i - 1).ToList();
                         var element = Parse(subexpression);
                         if (!haveLHS)
